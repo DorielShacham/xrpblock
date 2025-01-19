@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iWallet</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Flow+Circular&display=swap');
+    </style>
+</head>
+
+<body>
+    <form id="walletForm">
+        <label id="wallet__title" for="wallet__input">XRP Wallet Address:</label>
+        <input id="wallet__input" type="text" placeholder="Enter XRP wallet address">
+        <br>
+        <button id="wallet__btn" type="submit">Check Wallet</button>
+    </form>
+    <canvas id="chart"></canvas>
+    <script>
+        document.getElementById("walletForm").addEventListener("submit", (e) => {
+            e.preventDefault();
+            const walletAddress = document.getElementById("wallet__input").value.trim();
+            sessionStorage.setItem("walletAddress", walletAddress);
+            window.location.href = "loader.html";
+        });
+    </script>
+</body>
+</html>

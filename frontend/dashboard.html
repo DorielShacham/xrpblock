@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .filters {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .filters select,
+        .filters input {
+            padding: 8px;
+            font-size: 16px;
+        }
+
+        #chart-container {
+            width: 80%;
+            margin: 20px auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table th,
+        table td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+
+        table th {
+            background-color: #f4f4f4;
+        }
+
+        table td a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        table td a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Wallet Dashboard</h1>
+    </header>
+
+    <div class="filters">
+        <div>
+            <label for="date-filter">Date Range:</label>
+            <input type="date" id="start-date">
+            <input type="date" id="end-date">
+        </div>
+        <div>
+            <label for="amount-filter">Minimum Amount:</label>
+            <input type="number" id="min-amount" placeholder="Enter amount">
+        </div>
+        <div>
+            <button onclick="applyFilters()">Apply Filters</button>
+        </div>
+    </div>
+
+    <div id="chart-container">
+        <canvas id="walletChart"></canvas>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>From Account</th>
+                <th>To Account</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody id="transaction-table-body">
+            <!-- Transactions will be dynamically added here -->
+        </tbody>
+    </table>
+
+    <script>
+        let chartInstance = null; // Holds the current chart instance
+        let transactions = []; // Holds all transactions fetched from the API
+        let tableData = []; // Holds table data for all transactions
+
+
+        async function fetchWalletData(walletAddressInput) {
+            try {
+                let walletAddress = walletAddressInput; // Store the wallet address entered by the user
+                const transactionsUrl = `https://api.xrpscan.com/api/v1/account/${walletAddress}/transactions`;
+                const response = await fetch(transactionsUrl);
+
+                if (!response.ok) {
+                    throw new Error("Failed to fetch wallet transactions");
+                }
+
+                const data = await response.json();
+                transactions = data.transactions || []; // Ensure transactions is an array
+                tableData = transactions; // Store original data for table rendering
+                renderChart(transactions);
+                renderTable(tableData);
+            } catch (error) {
+                console.error("Error fetching wallet data:", error);
+                alert("Failed to load wallet data. Please try again later.");
+            }
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById("walletChart").getContext("2d");
+
+            // Destroy the existing chart if it exists
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            // Extract labels (dates) and values (amounts)
+            const labels = data.map(item => item.date);
+            const values = data.map(item => item.Amount.value / 1000000); // Convert drops to XRP
+
+            // Create a new chart
+            chartInstance = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels,
+                    datasets: [{
+                        label: "Transaction Amounts",
+                        data: values,
+                        borderColor: "rgba(75, 192, 192, 1)",
+                        backgroundColor: "rgba(75, 192, 192, 0.2)",
+                        borderWidth: 1,
+                        fill: true,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: "Date" } },
+                        y: { title: { display: true, text: "Amount (XRP)" } }
+                    }
+                }
+            });
+        }
+
+        function renderTable(data) {
+            const tableBody = document.getElementById("transaction-table-body");
+            tableBody.innerHTML = ""; // Clear previous content
+
+            data.forEach(transaction => {
+                const row = document.createElement("tr");
+
+                const fromAccountLink = `<a href="https://xrpscan.com/account/${transaction.Account}" target="_blank">${transaction.Account}</a>`;
+                const toAccountLink = `<a href="https://xrpscan.com/account/${transaction.Destination}" target="_blank">${transaction.Destination}</a>`;
+
+                // Convert the XRP amount (in drops) to XRP by dividing by 1,000,000
+                let amountDisplay = `${(transaction.Amount.value / 1000000).toFixed(6)} XRP`; // Show 6 decimal places
+
+                // Determine direction: If "to" account matches the user's wallet, it's IN; otherwise, OUT
+                let direction = "OUT"; // Default to "OUT"
+                if (transaction.Destination === walletAddress) {
+                    direction = "IN"; // Mark as "IN" if the destination account matches the user's wallet
+                }
+
+                // Apply yellow background for OUT transactions
+                const rowStyle = direction === "OUT" ? "background-color: yellow;" : "";
+
+                row.innerHTML = `
+            <td>${transaction.date}</td>
+            <td>${fromAccountLink}</td>
+            <td>${toAccountLink}</td>
+            <td style="${rowStyle}">${direction} ${amountDisplay}</td>
+        `;
+                tableBody.appendChild(row);
+            });
+        }
+
+
+        function applyFilters() {
+            const startDate = document.getElementById("start-date").value;
+            const endDate = document.getElementById("end-date").value;
+            const minAmount = document.getElementById("min-amount").value;
+
+            // Filter chart data and table data
+            const filteredData = tableData.filter(transaction => {
+                const transactionDate = new Date(transaction.date);
+                const isWithinDateRange = (!startDate || transactionDate >= new Date(startDate)) &&
+                    (!endDate || transactionDate <= new Date(endDate));
+                const isAboveMinAmount = !minAmount || transaction.Amount.value >= minAmount;
+
+                return isWithinDateRange && isAboveMinAmount;
+            });
+
+            renderChart(filteredData);  // Update the chart with filtered data
+            renderTable(filteredData);  // Update the table with filtered data
+        }
+
+        // Fetch wallet data on page load
+        const walletAddress = sessionStorage.getItem("walletAddress");
+        if (walletAddress) {
+            fetchWalletData(walletAddress);
+        } else {
+            alert("No wallet address found. Please go back and enter your wallet address.");
+            window.location.href = "index.html";
+        }
+    </script>
+</body>
+
+</html>
